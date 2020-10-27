@@ -9,6 +9,8 @@ from pandas.plotting import scatter_matrix
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn import preprocessing
+from sklearn.impute import SimpleImputer
 
 #Function to download credit card data
 def download_credit_card_data():
@@ -46,6 +48,26 @@ def split_train_test(df, test_train_ratio):
 def add_age_category(df):
     df["AGE_cat"] = np.ceil(df["AGE"] / 10)
     df["AGE_cat"].where(df["AGE_cat"] < 7, 7.0, inplace = True)
+    return df
+
+def select_correlated_features(df, threshold = 0.1, plot_boolean = False):
+    #Investigating correlation matrix
+    correlation_mat = df.corr()
+    correlation_mat_abs = abs(correlation_mat)
+    correlation_mat_abs_mask = correlation_mat_abs["default payment next month"] > threshold
+    # print(correlation_mat_abs["default payment next month"])
+    # print(correlation_mat_abs_mask)
+    # print(correlation_mat_abs["default payment next month"][correlation_mat_abs_mask])
+    print(correlation_mat_abs["default payment next month"].sort_values(ascending = False))
+    corr_features = correlation_mat_abs["default payment next month"][correlation_mat_abs_mask].index
+    corr_features = np.array(corr_features)
+    print(corr_features)
+    if(plot_boolean):
+        pd.plotting.scatter_matrix(df[corr_features])
+        plt.show()
+
+    #Only including correlated variables
+    df = df[corr_features]
     return df
 
 
@@ -117,28 +139,34 @@ def main():
     #     print((train_set["AGE_cat"].value_counts()[i]/len(train_set) - cat) * 100/cat, (strat_train_set["AGE_cat"].value_counts()[i]/len(strat_train_set) - cat) * 100/cat)
 
     #Making a sample of the training set to experiment with
-    strat_train_set_sample = strat_train_set.sample(frac = 0.1, random_state = 42)
+    strat_train_set_sample = strat_train_set.sample(frac = 0.5, random_state = 42)
 
-
-    #Investigating correlation matrix
-    correlation_mat = strat_train_set_sample.corr()
-    correlation_mat_abs = abs(correlation_mat)
-    correlation_mat_abs_mask = correlation_mat_abs["default payment next month"] > 0.05
-    print(correlation_mat_abs["default payment next month"])
-    print(correlation_mat_abs_mask)
-    print(correlation_mat_abs["default payment next month"][correlation_mat_abs_mask].index)
-    corr_features = correlation_mat_abs["default payment next month"][correlation_mat_abs_mask].index
-    corr_features = np.array(corr_features)
-    print(corr_features)
 
     #Do I need to add extra variables?
+    #Could try adding total credit dvidied by first payment and see if there's any correlation
+    strat_train_set_sample["PAY_AMT1_ratio"] = strat_train_set_sample["PAY_AMT1"] / strat_train_set_sample["LIMIT_BAL"]
+    #Doing this for every PAY_AMT
+    print(strat_train_set_sample[:, ["PAY_AMT1":"PAY_AMT6"]])
 
+
+
+    strat_train_set_sample = select_correlated_features(strat_train_set_sample, threshold = 0.02, plot_boolean = False)
 
     #Check for missing data values
-
-
-
+    print(strat_train_set_sample.info())
+    print(strat_train_set_sample.describe())
+    #12000 values in each - no missing values, but shall add
+    imp_median = SimpleImputer(missing_values=np.nan, strategy='median')
+    imp_median.fit(strat_train_set_sample)
+    imp_median.transform(strat_train_set_sample)
     #Any values need to be encoded?
+
+    #Feature scaling using StandardScaler
+    scaler = preprocessing.StandardScaler().fit(strat_train_set)
+    print(scaler.mean_)
+    print(scaler.scale_)
+
+
 
 
 main()
