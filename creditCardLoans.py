@@ -9,8 +9,10 @@ from pandas.plotting import scatter_matrix
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.model_selection import StratifiedShuffleSplit
-from sklearn import preprocessing
+from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.base import BaseEstimator, TransformerMixin
 
 #Function to download credit card data
 def download_credit_card_data():
@@ -69,6 +71,47 @@ def select_correlated_features(df, threshold = 0.1, plot_boolean = False):
     #Only including correlated variables
     df = df[corr_features]
     return df
+
+#Custom transform to handle pandas dataframe
+class DataFrameSelector(BaseEstimator, TransformerMixin):
+    """Doc string for DataFrameSelector"""
+    def __init__(self, attribute_names):
+        self.attribute_names = attribute_names
+    def fit(self, X, y = None):
+        return self
+    def transform(self, X):
+        return X[self.attribute_names].values
+
+
+#Making transformer class
+class RatioAttributesAdder(BaseEstimator, TransformerMixin):
+    """docstring for RatioAttributesAdder"""
+
+    def __init__(self, add_payment_ratios = True):
+        self.add_payment_ratios = add_payment_ratios
+    def fit(self, X, y = None):
+        return self
+    def transform(self, X, y = None):
+        if self.add_payment_ratios:
+            print("Adding payment ratios")
+            print(X)
+            print(X.shape)
+            print(type(X))
+            print(X[0,1])
+            print(X[0,18])
+            # LIMIT_BAL =
+            payment_ratios = X[:,18] / X[:,1]
+            return np.c_[X, payment_ratios]
+        else:
+            return np.c_[X]
+
+#Implementing pipeline
+prep_pipeline = Pipeline([
+    # ('selector', DataFrameSelector(num_attributes))
+    ('imputer', SimpleImputer(missing_values=np.nan, strategy='median')),
+    # ('ratio_attribs_adder', RatioAttributesAdder()),#Adding on ratio variables
+    ('std scaler', StandardScaler())
+])
 
 
 def main():
@@ -142,11 +185,33 @@ def main():
     strat_train_set_sample = strat_train_set.sample(frac = 0.5, random_state = 42)
 
 
+    #Trying to get attribute adder to work
+    attr_adder = RatioAttributesAdder()
+    extra_attribs = attr_adder.transform(strat_train_set_sample.values)
+
+
+    return
+
+    strat_train_set_sample_array = prep_pipeline.fit_transform(strat_train_set_sample)
+    print(strat_train_set_sample_array)
+    print(strat_train_set_sample_array.shape)
+    #Putting it back in to pandas df
+    strat_train_set_sample = pd.DataFrame(strat_train_set_sample_array, columns = strat_train_set_sample.columns)
+    print(strat_train_set_sample)
+
+
+
+
     #Do I need to add extra variables?
     #Could try adding total credit dvidied by first payment and see if there's any correlation
     strat_train_set_sample["PAY_AMT1_ratio"] = strat_train_set_sample["PAY_AMT1"] / strat_train_set_sample["LIMIT_BAL"]
     #Doing this for every PAY_AMT
-    print(strat_train_set_sample[:, ["PAY_AMT1":"PAY_AMT6"]])
+    for col in strat_train_set_sample.loc[:, "PAY_AMT1":"PAY_AMT6"]:
+        new_column_name = str(col) + ("_ratio")
+        print(col, new_column_name)
+        strat_train_set_sample[new_column_name] = strat_train_set_sample[col] / strat_train_set_sample["LIMIT_BAL"]
+    # print(strat_train_set_sample.loc[:, "PAY_AMT1":"PAY_AMT6"])
+    print(strat_train_set_sample.columns)
 
 
 
@@ -161,12 +226,12 @@ def main():
     imp_median.transform(strat_train_set_sample)
     #Any values need to be encoded?
 
-    #test comment
 
     #Feature scaling using StandardScaler
-    scaler = preprocessing.StandardScaler().fit(strat_train_set)
+    scaler = StandardScaler().fit(strat_train_set)
     print(scaler.mean_)
     print(scaler.scale_)
+
 
 
 
