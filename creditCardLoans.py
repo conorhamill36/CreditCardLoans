@@ -161,6 +161,8 @@ def main():
     imp_median.transform(strat_train_set_sample)
     #Any values need to be encoded?
 
+    #test comment
+
     #Feature scaling using StandardScaler
     scaler = preprocessing.StandardScaler().fit(strat_train_set)
     print(scaler.mean_)
