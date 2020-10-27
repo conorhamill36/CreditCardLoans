@@ -5,8 +5,10 @@
 import os
 from six.moves import urllib
 import pandas as pd
+from pandas.plotting import scatter_matrix
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.model_selection import StratifiedShuffleSplit
 
 #Function to download credit card data
 def download_credit_card_data():
@@ -41,6 +43,11 @@ def split_train_test(df, test_train_ratio):
 
     return df.iloc[train_set_indices], df.iloc[test_set_indices]
 
+def add_age_category(df):
+    df["AGE_cat"] = np.ceil(df["AGE"] / 10)
+    df["AGE_cat"].where(df["AGE_cat"] < 7, 7.0, inplace = True)
+    return df
+
 
 def main():
     print("hello world")
@@ -67,12 +74,62 @@ def main():
     #BILL_AMT features are very tail-heavy
 
     #Create test and train sets with random number generator seed set
+    np.random.seed(42)
     train_set, test_set = split_train_test(credit_card_df, 0.2)
     print(f"Train set length = {len(train_set)}")
     print(f"Test set length = {len(test_set)}")
 
-    #Show correlation matrix
+    #Shall sample from age strata to ensure groups are representative of age groups
+    #Dividing by 10 gives 6 age categories, rounding up to five groups
+    credit_card_df = add_age_category(credit_card_df)
+    # show_histograms(credit_card_df, ["AGE_cat", "AGE"])
 
+    split = StratifiedShuffleSplit(n_splits = 1, test_size = 0.2, random_state = 42)
+    for train_index, test_index in split.split(credit_card_df, credit_card_df["AGE_cat"]):
+        strat_train_set = credit_card_df.loc[train_index]
+        strat_test_set = credit_card_df.loc[test_index]
+
+    print(f"Strat train set length = {len(strat_train_set)}")
+    print(f"Strat test set length = {len(strat_test_set)}")
+
+    #Checking how age proportionalities match up with random or stratified sampling
+
+    train_set = add_age_category(train_set)
+    strat_train_set = add_age_category(strat_train_set)
+
+    print("Overall:")
+    print(credit_card_df["AGE_cat"].value_counts() / len(credit_card_df))
+    print("Random:")
+    print(train_set["AGE_cat"].value_counts() / len(train_set))
+    print("Stratified:")
+    print(strat_train_set["AGE_cat"].value_counts() / len(strat_train_set))
+    #Stratified sampling does give a better representation of the overall data
+
+    #Removing AGE_cat variable from data frames
+    for set_ in (strat_test_set, strat_train_set):
+        set_.drop("AGE_cat", axis = 1, inplace = True)
+
+    # print("Overall\tRandom\tStrat\tRand. Error\tStrat. Error\n")
+    # for i, cat in enumerate(credit_card_df["AGE_cat"].value_counts()/len(credit_card_df)):
+    #     print(cat,
+    #     train_set["AGE_cat"].value_counts()[i]/len(train_set),
+    #     strat_train_set["AGE_cat"].value_counts()[i]/len(strat_train_set))
+    #     print((train_set["AGE_cat"].value_counts()[i]/len(train_set) - cat) * 100/cat, (strat_train_set["AGE_cat"].value_counts()[i]/len(strat_train_set) - cat) * 100/cat)
+
+    #Making a sample of the training set to experiment with
+    strat_train_set_sample = strat_train_set.sample(frac = 0.1, random_state = 42)
+
+
+    #Investigating correlation matrix
+    correlation_mat = strat_train_set_sample.corr()
+    correlation_mat_abs = abs(correlation_mat)
+    correlation_mat_abs_mask = correlation_mat_abs["default payment next month"] > 0.05
+    print(correlation_mat_abs["default payment next month"])
+    print(correlation_mat_abs_mask)
+    print(correlation_mat_abs["default payment next month"][correlation_mat_abs_mask].index)
+    corr_features = correlation_mat_abs["default payment next month"][correlation_mat_abs_mask].index
+    corr_features = np.array(corr_features)
+    print(corr_features)
 
     #Do I need to add extra variables?
 
