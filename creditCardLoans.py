@@ -321,17 +321,23 @@ def main():
 
     #Making parameter grid
     param_grid = [
-    {'classifier' : [LogisticRegression()],
+    # {'C' : np.logspace(-4, 4, 20)
     #  'classifier__penalty' : ['l1', 'l2'],
-    # 'classifier__C' : np.logspace(-4, 4, 20),
+    'classifier__C' : np.logspace(-4, 4, 20),
     # 'classifier__solver' : ['liblinear']}
     }
     ]
 
     #Making grid search object
-    grid_clf = GridSearchCV(log_reg, param_grid, cv=5, scoring='neg_mean_squared_error')
+    grid_clf = GridSearchCV(log_reg, param_grid = param_grid, cv=5, scoring='neg_mean_squared_error')
 
     grid_clf.fit(X, y)
+
+    print(grid_clf.best_params_)
+
+    cvres = grid_clf.cv_results_
+    for mean_score, params in zip(cvres["mean_test_score"], cvres["params"]):
+        print(mean_score, params)
 
     return
     #Decision trees
