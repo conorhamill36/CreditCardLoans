@@ -33,6 +33,7 @@ def download_credit_card_data():
     if not os.path.isfile(xlsx_path):
         urllib.request.urlretrieve(download_url, xlsx_path)
 
+#Function to turn credit card data in to a DataFrame
 def load_credit_card_data():
     data_path = "data_dir/"
     data_file_name = "credit_card_data.xlsx"
@@ -42,11 +43,13 @@ def load_credit_card_data():
     print(f"Reading in dataframe from {xlsx_path}")
     return credit_card_df
 
+#Displays the histograms of selected features in a dataset
 def show_histograms(df, features, bins = 50):
     df[features].hist(bins = bins, figsize=(20, 15))
     plt.show()
 
-def split_train_test(df, test_train_ratio):
+#Splits a data set in to train and test sets, with ratio defined
+def split_train_test(df, test_train_ratio = 0.8):
     shuffled_indices = np.random.permutation(len(df))
     test_set_length = int(len(df) * test_train_ratio)
     test_set_indices = shuffled_indices[:test_set_length]
@@ -90,7 +93,7 @@ class DataFrameSelector(BaseEstimator, TransformerMixin):
         return X[self.attribute_names].values
 
 
-#Making transformer class
+#Making transformer class that adds on another attribute to data frame
 class RatioAttributesAdder(BaseEstimator, TransformerMixin):
     """Class to add the ratio of the first payment divided
     by the total payment to the dataframe"""
@@ -128,10 +131,10 @@ class RatioAttributesAdder(BaseEstimator, TransformerMixin):
 
 #Implementing pipeline for preparation of data
 prep_pipeline = Pipeline([
-    # ('selector', DataFrameSelector(num_attributes))
     ('imputer', SimpleImputer(missing_values=np.nan, strategy='median')),
-    # ('ratio_attribs_adder', RatioAttributesAdder()),#Adding on ratio variables
-    # ('std scaler', StandardScaler())
+    ('ratio_attribs_adder', RatioAttributesAdder()),#Adding on ratio variables
+    ('std scaler', StandardScaler())
+    # ('selector', DataFrameSelector(num_attributes))
 ])
 
 
@@ -155,19 +158,38 @@ def main():
     print("Choosing interesting features to look at")
     features = ['LIMIT_BAL','SEX', 'EDUCATION', 'AGE']
 
-    # show_histograms(credit_card_df, features)
-    # show_histograms(credit_card_df, credit_card_df.columns)
-
-    #Seems to be some strangely popular ages in the data
-    #University seems to be the most popular level of education
-    #BILL_AMT features are very tail-heavy
-
     #Create test and train sets with random number generator seed set
     print("Create test and train sets with random number generator seed set")
     np.random.seed(42)
     train_set, test_set = split_train_test(credit_card_df, 0.2)
     print(f"Train set length = {len(train_set)}")
     print(f"Test set length = {len(test_set)}")
+    #Test data set is being set to the side for the time being
+    #...but I also need to transform it at some point as well
+
+    #Seems to be some strangely popular ages in the data
+    #University seems to be the most popular level of education
+    #BILL_AMT features are very tail-heavy
+
+
+    #Check for missing data values
+    # print("Check for missing data values")
+    # print(strat_train_set_sample.info())
+    # print(strat_train_set_sample.describe())
+    # #12000 values in each - no missing values, but shall add
+    # print("Adding imputer")
+    # imp_median = SimpleImputer(missing_values=np.nan, strategy='median')
+    # imp_median.fit(strat_train_set_sample)
+    # imp_median.transform(strat_train_set_sample)
+    # #Any values need to be encoded?
+    #
+    #
+    # #Feature scaling using StandardScaler
+    # print("Feature scaling using StandardScaler")
+    # scaler = StandardScaler().fit(strat_train_set)
+    # print(scaler.mean_)
+    # print(scaler.scale_)
+
 
 
 
@@ -176,7 +198,7 @@ def main():
     #Dividing by 10 gives 6 age categories, rounding up to five groups
     print("Dividing by 10 gives 6 age categories, rounding up to five groups")
     credit_card_df = add_age_category(credit_card_df)
-    # show_histograms(credit_card_df, ["AGE_cat", "AGE"])
+
 
     split = StratifiedShuffleSplit(n_splits = 1, test_size = 0.2, random_state = 42)
     for train_index, test_index in split.split(credit_card_df, credit_card_df["AGE_cat"]):
@@ -216,32 +238,30 @@ def main():
     strat_train_set_sample = strat_train_set.sample(frac = 0.5, random_state = 42)
 
 
-    #Trying to get attribute adder to work
-    print("Trying to get attribute adder to work")
-    #Instance of attribute adder
-    attr_adder = RatioAttributesAdder(add_payment_ratios = True)
-
-    #Returns 2D numpy array
-    extra_attribs = attr_adder.transform(strat_train_set_sample.values)
-
-    #Adding new data to dataframe
-    strat_train_set_sample = strat_train_set_sample.assign(Ratio = extra_attribs[:,-1])
-
-    print("Shapes:")
-    print(extra_attribs.shape)
-    print(strat_train_set_sample.shape)
-
-    extra_attribs_columns = (strat_train_set_sample.columns)
-    print(extra_attribs_columns)
-    print(type(extra_attribs_columns))
-
-    # strat_train_set_sample = pd.DataFrame(data = extra_attribs, columns = strat_train_set_sample.columns)
-
-
-    print(type(extra_attribs))
-    print(type(strat_train_set_sample))
-    print(len(extra_attribs))
-    print(len(strat_train_set_sample))
+    #Adding another attribute to data frame
+    # print("Adding another attribute to data frame")
+    # #Instance of attribute adder
+    # attr_adder = RatioAttributesAdder(add_payment_ratios = True)
+    # #Returns 2D numpy array
+    # extra_attribs = attr_adder.transform(strat_train_set_sample.values)
+    # #Adding new data to dataframe
+    # strat_train_set_sample = strat_train_set_sample.assign(Ratio = extra_attribs[:,-1])
+    #
+    # print("Shapes:")
+    # print(extra_attribs.shape)
+    # print(strat_train_set_sample.shape)
+    #
+    # extra_attribs_columns = (strat_train_set_sample.columns)
+    # print(extra_attribs_columns)
+    # print(type(extra_attribs_columns))
+    #
+    # # strat_train_set_sample = pd.DataFrame(data = extra_attribs, columns = strat_train_set_sample.columns)
+    #
+    #
+    # print(type(extra_attribs))
+    # print(type(strat_train_set_sample))
+    # print(len(extra_attribs))
+    # print(len(strat_train_set_sample))
 
     print(strat_train_set_sample.head())
 
@@ -252,22 +272,16 @@ def main():
     print(strat_train_set_sample_array)
     print(strat_train_set_sample_array.shape)
     #Putting it back in to pandas df
-    strat_train_set_sample = pd.DataFrame(strat_train_set_sample_array, columns = strat_train_set_sample.columns)
+    new_columns = list(strat_train_set_sample.columns)
+    new_columns.append("Ratio")
+    print(new_columns)
+    strat_train_set_sample = pd.DataFrame(columns = new_columns, data = strat_train_set_sample_array)
+    # strat_train_set_sample.assign(Ratio = [])
+    # strat_train_set_sample.append(strat_train_set_sample_array)
+
     print(strat_train_set_sample)
+    return
 
-
-
-
-    #Do I need to add extra variables?
-    # #Could try adding total credit dvidied by first payment and see if there's any correlation
-    # strat_train_set_sample["PAY_AMT1_ratio"] = strat_train_set_sample["PAY_AMT1"] / strat_train_set_sample["LIMIT_BAL"]
-    # #Doing this for every PAY_AMT
-    # for col in strat_train_set_sample.loc[:, "PAY_AMT1":"PAY_AMT6"]:
-    #     new_column_name = str(col) + ("_ratio")
-    #     print(col, new_column_name)
-    #     strat_train_set_sample[new_column_name] = strat_train_set_sample[col] / strat_train_set_sample["LIMIT_BAL"]
-    # # print(strat_train_set_sample.loc[:, "PAY_AMT1":"PAY_AMT6"])
-    # print(strat_train_set_sample.columns)
 
 
     #Selecting correlated features
@@ -278,23 +292,7 @@ def main():
 
 
 
-    #Check for missing data values
-    # print("Check for missing data values")
-    # print(strat_train_set_sample.info())
-    # print(strat_train_set_sample.describe())
-    # #12000 values in each - no missing values, but shall add
-    # print("Adding imputer")
-    # imp_median = SimpleImputer(missing_values=np.nan, strategy='median')
-    # imp_median.fit(strat_train_set_sample)
-    # imp_median.transform(strat_train_set_sample)
-    # #Any values need to be encoded?
-    #
-    #
-    # #Feature scaling using StandardScaler
-    # print("Feature scaling using StandardScaler")
-    # scaler = StandardScaler().fit(strat_train_set)
-    # print(scaler.mean_)
-    # print(scaler.scale_)
+
 
     #Now trying some models for the data
     print("Now trying some models for the data")
@@ -321,15 +319,18 @@ def main():
 
     #Making parameter grid
     param_grid = [
-    # {'C' : np.logspace(-4, 4, 20)
+    {
+    'C' : np.logspace(-4, 4, 20),
+    'penalty' : ['l2'],
+    'solver' : ['sag', 'saga']
     #  'classifier__penalty' : ['l1', 'l2'],
-    'classifier__C' : np.logspace(-4, 4, 20),
+    # 'classifier__C' : np.logspace(-4, 4, 20),
     # 'classifier__solver' : ['liblinear']}
     }
     ]
 
     #Making grid search object
-    grid_clf = GridSearchCV(log_reg, param_grid = param_grid, cv=5, scoring='neg_mean_squared_error')
+    grid_clf = GridSearchCV(log_reg, param_grid = param_grid, cv=3, scoring='neg_mean_squared_error')
 
     grid_clf.fit(X, y)
 
