@@ -13,6 +13,9 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn import svm
 
 #Function to download credit card data
 def download_credit_card_data():
@@ -85,7 +88,8 @@ class DataFrameSelector(BaseEstimator, TransformerMixin):
 
 #Making transformer class
 class RatioAttributesAdder(BaseEstimator, TransformerMixin):
-    """docstring for RatioAttributesAdder"""
+    """Class to add the ratio of the first payment divided
+    by the total payment to the dataframe"""
 
     def __init__(self, add_payment_ratios = True):
         self.add_payment_ratios = add_payment_ratios
@@ -94,23 +98,36 @@ class RatioAttributesAdder(BaseEstimator, TransformerMixin):
     def transform(self, X, y = None):
         if self.add_payment_ratios:
             print("Adding payment ratios")
+            print("X: ")
             print(X)
+            print("X shape: ")
             print(X.shape)
+            print("X type: ")
             print(type(X))
+            print("X[0,1]: ")
             print(X[0,1])
+            print("X[0,18]: ")
             print(X[0,18])
+            print("X[:,1]")
+            print(X[:,1])
+            print("len X[:,18]")
+            print(len(X[:,18]))
             # LIMIT_BAL =
             payment_ratios = X[:,18] / X[:,1]
+            print(f"shape(payment_ratios: {payment_ratios.shape}")
+            print(f"shape(payment_ratios: {np.c_[X].shape}")
+            print(f"shape(payment_ratios: {np.c_[X, payment_ratios].shape}")
+            #Returns 2D numpy array
             return np.c_[X, payment_ratios]
         else:
             return np.c_[X]
 
-#Implementing pipeline
+#Implementing pipeline for preparation of data
 prep_pipeline = Pipeline([
     # ('selector', DataFrameSelector(num_attributes))
     ('imputer', SimpleImputer(missing_values=np.nan, strategy='median')),
     # ('ratio_attribs_adder', RatioAttributesAdder()),#Adding on ratio variables
-    ('std scaler', StandardScaler())
+    # ('std scaler', StandardScaler())
 ])
 
 
@@ -118,9 +135,11 @@ def main():
     print("hello world")
 
     #Downloading data
+    print("Downloading data")
     download_credit_card_data()
 
     #Reading in data to pandas dataframe
+    print("Reading in data to pandas dataframe")
     credit_card_df = load_credit_card_data()
     print(f"Columns: \n{credit_card_df.columns}\n")
     print(f"Summary stats:\n{credit_card_df.describe()}\n")
@@ -128,7 +147,8 @@ def main():
 
     #Look at histograms of data
 
-    #Choose interesting features to look at
+    #Choosing interesting features to look at
+    print("Choosing interesting features to look at")
     features = ['LIMIT_BAL','SEX', 'EDUCATION', 'AGE']
 
     # show_histograms(credit_card_df, features)
@@ -139,13 +159,18 @@ def main():
     #BILL_AMT features are very tail-heavy
 
     #Create test and train sets with random number generator seed set
+    print("Create test and train sets with random number generator seed set")
     np.random.seed(42)
     train_set, test_set = split_train_test(credit_card_df, 0.2)
     print(f"Train set length = {len(train_set)}")
     print(f"Test set length = {len(test_set)}")
 
+
+
     #Shall sample from age strata to ensure groups are representative of age groups
+    print("Shall sample from age strata to ensure groups are representative of age groups")
     #Dividing by 10 gives 6 age categories, rounding up to five groups
+    print("Dividing by 10 gives 6 age categories, rounding up to five groups")
     credit_card_df = add_age_category(credit_card_df)
     # show_histograms(credit_card_df, ["AGE_cat", "AGE"])
 
@@ -158,7 +183,7 @@ def main():
     print(f"Strat test set length = {len(strat_test_set)}")
 
     #Checking how age proportionalities match up with random or stratified sampling
-
+    print("Checking how age proportionalities match up with random or stratified sampling")
     train_set = add_age_category(train_set)
     strat_train_set = add_age_category(strat_train_set)
 
@@ -171,6 +196,7 @@ def main():
     #Stratified sampling does give a better representation of the overall data
 
     #Removing AGE_cat variable from data frames
+    print("Removing AGE_cat variable from data frames")
     for set_ in (strat_test_set, strat_train_set):
         set_.drop("AGE_cat", axis = 1, inplace = True)
 
@@ -182,16 +208,42 @@ def main():
     #     print((train_set["AGE_cat"].value_counts()[i]/len(train_set) - cat) * 100/cat, (strat_train_set["AGE_cat"].value_counts()[i]/len(strat_train_set) - cat) * 100/cat)
 
     #Making a sample of the training set to experiment with
+    print("Making a sample of the training set to experiment with")
     strat_train_set_sample = strat_train_set.sample(frac = 0.5, random_state = 42)
 
 
     #Trying to get attribute adder to work
-    attr_adder = RatioAttributesAdder()
+    print("Trying to get attribute adder to work")
+    #Instance of attribute adder
+    attr_adder = RatioAttributesAdder(add_payment_ratios = True)
+
+    #Returns 2D numpy array
     extra_attribs = attr_adder.transform(strat_train_set_sample.values)
 
+    #Adding new data to dataframe
+    strat_train_set_sample = strat_train_set_sample.assign(Ratio = extra_attribs[:,-1])
 
-    return
+    print("Shapes:")
+    print(extra_attribs.shape)
+    print(strat_train_set_sample.shape)
 
+    extra_attribs_columns = (strat_train_set_sample.columns)
+    print(extra_attribs_columns)
+    print(type(extra_attribs_columns))
+
+    # strat_train_set_sample = pd.DataFrame(data = extra_attribs, columns = strat_train_set_sample.columns)
+
+
+    print(type(extra_attribs))
+    print(type(strat_train_set_sample))
+    print(len(extra_attribs))
+    print(len(strat_train_set_sample))
+
+    print(strat_train_set_sample.head())
+
+
+    #Using preparation pipeline
+    print("Using preparation pipeline")
     strat_train_set_sample_array = prep_pipeline.fit_transform(strat_train_set_sample)
     print(strat_train_set_sample_array)
     print(strat_train_set_sample_array.shape)
@@ -203,35 +255,81 @@ def main():
 
 
     #Do I need to add extra variables?
-    #Could try adding total credit dvidied by first payment and see if there's any correlation
-    strat_train_set_sample["PAY_AMT1_ratio"] = strat_train_set_sample["PAY_AMT1"] / strat_train_set_sample["LIMIT_BAL"]
-    #Doing this for every PAY_AMT
-    for col in strat_train_set_sample.loc[:, "PAY_AMT1":"PAY_AMT6"]:
-        new_column_name = str(col) + ("_ratio")
-        print(col, new_column_name)
-        strat_train_set_sample[new_column_name] = strat_train_set_sample[col] / strat_train_set_sample["LIMIT_BAL"]
-    # print(strat_train_set_sample.loc[:, "PAY_AMT1":"PAY_AMT6"])
-    print(strat_train_set_sample.columns)
+    # #Could try adding total credit dvidied by first payment and see if there's any correlation
+    # strat_train_set_sample["PAY_AMT1_ratio"] = strat_train_set_sample["PAY_AMT1"] / strat_train_set_sample["LIMIT_BAL"]
+    # #Doing this for every PAY_AMT
+    # for col in strat_train_set_sample.loc[:, "PAY_AMT1":"PAY_AMT6"]:
+    #     new_column_name = str(col) + ("_ratio")
+    #     print(col, new_column_name)
+    #     strat_train_set_sample[new_column_name] = strat_train_set_sample[col] / strat_train_set_sample["LIMIT_BAL"]
+    # # print(strat_train_set_sample.loc[:, "PAY_AMT1":"PAY_AMT6"])
+    # print(strat_train_set_sample.columns)
 
 
-
+    #Selecting correlated features
+    print("Selecting correlated features")
     strat_train_set_sample = select_correlated_features(strat_train_set_sample, threshold = 0.02, plot_boolean = False)
 
+    print(strat_train_set_sample)
+
+
+
     #Check for missing data values
-    print(strat_train_set_sample.info())
-    print(strat_train_set_sample.describe())
-    #12000 values in each - no missing values, but shall add
-    imp_median = SimpleImputer(missing_values=np.nan, strategy='median')
-    imp_median.fit(strat_train_set_sample)
-    imp_median.transform(strat_train_set_sample)
-    #Any values need to be encoded?
+    # print("Check for missing data values")
+    # print(strat_train_set_sample.info())
+    # print(strat_train_set_sample.describe())
+    # #12000 values in each - no missing values, but shall add
+    # print("Adding imputer")
+    # imp_median = SimpleImputer(missing_values=np.nan, strategy='median')
+    # imp_median.fit(strat_train_set_sample)
+    # imp_median.transform(strat_train_set_sample)
+    # #Any values need to be encoded?
+    #
+    #
+    # #Feature scaling using StandardScaler
+    # print("Feature scaling using StandardScaler")
+    # scaler = StandardScaler().fit(strat_train_set)
+    # print(scaler.mean_)
+    # print(scaler.scale_)
+
+    #Now trying some models for the data
+    print("Now trying some models for the data")
+
+    print(strat_train_set_sample["PAY_0"])
+
+    # return
+    X = strat_train_set_sample[["PAY_0", "MARRIAGE"]]#.reshape(1, -1)
+    # X = strat_train_set_sample[["PAY_0"]]
+    y = strat_train_set_sample[["default payment next month"]].astype(np.int)
+
+    #Logistic regression
+    print("\n\n\nLogistic regression")
+    #Instance of logistic regression model
+    log_reg = LogisticRegression()
+
+    log_reg.fit(X, y)
+    print(f"Score: {log_reg.score(X, y)}")
+
+    #Decision trees
+    print("Decision tree")
+
+    #Instance of decision tree classifier
+    dt_clf = DecisionTreeClassifier()
+    dt_clf.fit(X, y)
+
+    print(f"Score: {dt_clf.score(X, y)}")
+
+    #Support Vector Machine
+    svm_clf = svm.SVC(kernel='linear')
+
+    svm_clf.fit(X, y)
+
+    print(f"Score: {svm_clf.score(X, y)}")
 
 
-    #Feature scaling using StandardScaler
-    scaler = StandardScaler().fit(strat_train_set)
-    print(scaler.mean_)
-    print(scaler.scale_)
 
+
+    return
 
 
 
