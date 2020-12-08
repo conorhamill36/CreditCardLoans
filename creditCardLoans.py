@@ -15,7 +15,11 @@ from sklearn.pipeline import Pipeline
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import VotingClassifier
 from sklearn import svm
+from sklearn.ensemble import VotingClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import GridSearchCV
 
 #Function to download credit card data
 def download_credit_card_data():
@@ -268,7 +272,7 @@ def main():
 
     #Selecting correlated features
     print("Selecting correlated features")
-    strat_train_set_sample = select_correlated_features(strat_train_set_sample, threshold = 0.02, plot_boolean = False)
+    strat_train_set_sample = select_correlated_features(strat_train_set_sample, threshold = 0.08, plot_boolean = False)
 
     print(strat_train_set_sample)
 
@@ -297,19 +301,39 @@ def main():
 
     print(strat_train_set_sample["PAY_0"])
 
-    # return
-    X = strat_train_set_sample[["PAY_0", "MARRIAGE"]]#.reshape(1, -1)
-    # X = strat_train_set_sample[["PAY_0"]]
+    X_columns = list(strat_train_set_sample.columns)#.remove("default payment next month")
+    X_columns.remove("default payment next month")
+    print(f"X columns: {len(X_columns)}")
+
+    # X = strat_train_set_sample[["PAY_0", "MARRIAGE"]]#.reshape(1, -1)
+    X = strat_train_set_sample[X_columns]
     y = strat_train_set_sample[["default payment next month"]].astype(np.int)
 
     #Logistic regression
     print("\n\n\nLogistic regression")
     #Instance of logistic regression model
-    log_reg = LogisticRegression()
+    log_reg = LogisticRegression()#penalty = 'l2', C = 0.1,random_state = 0)
 
-    log_reg.fit(X, y)
-    print(f"Score: {log_reg.score(X, y)}")
+    # log_reg.fit(X, y)
+    # print(f"Score: {log_reg.score(X, y)}")
 
+    #Using GridSearchCV to find optimum parameters
+
+    #Making parameter grid
+    param_grid = [
+    {'classifier' : [LogisticRegression()],
+    #  'classifier__penalty' : ['l1', 'l2'],
+    # 'classifier__C' : np.logspace(-4, 4, 20),
+    # 'classifier__solver' : ['liblinear']}
+    }
+    ]
+
+    #Making grid search object
+    grid_clf = GridSearchCV(log_reg, param_grid, cv=5, scoring='neg_mean_squared_error')
+
+    grid_clf.fit(X, y)
+
+    return
     #Decision trees
     print("Decision tree")
 
@@ -319,14 +343,32 @@ def main():
 
     print(f"Score: {dt_clf.score(X, y)}")
 
-    #Support Vector Machine
+    #Support Vector Machine - is taking a very very long time
+    X_svm = np.array(strat_train_set_sample["PAY_0"]).reshape(-1, 1)#.reshape(-1, 1)
+    print("Support Vector Machine")
     svm_clf = svm.SVC(kernel='linear')
-
-    svm_clf.fit(X, y)
-
-    print(f"Score: {svm_clf.score(X, y)}")
+    svm_clf.fit(X_svm[:1000], y[:1000])
+    print(f"Score: {svm_clf.score(X_svm, y)}")
 
 
+    #K-nearest neighbours model
+    print("K-nearest neighbours")
+
+    knn_model = KNeighborsClassifier(n_neighbors = 3)
+    knn_model.fit(X, y)
+    print(f"Score: {knn_model.score(X, y)}")
+
+
+
+    #Making an ensemble model
+    print(f"Making an ensemble model")
+    voting_clf = VotingClassifier(
+        estimators = [('lr', log_reg), ('dt', dt_clf), ('knn', knn_model)],# ('svm', svm_clf)],
+        voting = 'soft' #Soft currently doing better than hard
+    )
+    voting_clf.fit(X, y)
+
+    print(f"Score: {voting_clf.score(X, y)}")
 
 
     return
