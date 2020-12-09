@@ -17,7 +17,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import VotingClassifier
 from sklearn import svm
-from sklearn.ensemble import VotingClassifier
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import GridSearchCV
 
@@ -62,14 +62,15 @@ def add_age_category(df):
     df["AGE_cat"].where(df["AGE_cat"] < 7, 7.0, inplace = True)
     return df
 
-def select_correlated_features(df, threshold = 0.1, plot_boolean = False):
+def select_correlated_features(df, threshold = 0.1, plot_boolean = False, target = "default payment next month"):
     #Investigating correlation matrix
     correlation_mat = df.corr()
     correlation_mat_abs = abs(correlation_mat)
     correlation_mat_abs_mask = correlation_mat_abs["default payment next month"] > threshold
-    # print(correlation_mat_abs["default payment next month"])
+    print(correlation_mat)
+    print(correlation_mat_abs["default payment next month"])
     # print(correlation_mat_abs_mask)
-    # print(correlation_mat_abs["default payment next month"][correlation_mat_abs_mask])
+    print(correlation_mat_abs["default payment next month"][correlation_mat_abs_mask])
     print(correlation_mat_abs["default payment next month"].sort_values(ascending = False))
     corr_features = correlation_mat_abs["default payment next month"][correlation_mat_abs_mask].index
     corr_features = np.array(corr_features)
@@ -233,9 +234,23 @@ def main():
     #     strat_train_set["AGE_cat"].value_counts()[i]/len(strat_train_set))
     #     print((train_set["AGE_cat"].value_counts()[i]/len(train_set) - cat) * 100/cat, (strat_train_set["AGE_cat"].value_counts()[i]/len(strat_train_set) - cat) * 100/cat)
 
+
+    #Splitting test set in to target and feature variables
+    strat_test_set_X = strat_test_set.drop(columns = ["default payment next month"])
+    strat_test_set_y = strat_test_set["default payment next month"]
+
+    #Adding ratio variable to test set
+    #Instance of attribute adder
+    attr_adder = RatioAttributesAdder(add_payment_ratios = True)
+    #Returns 2D numpy array
+    extra_attribs = attr_adder.transform(strat_test_set_X.values)
+    #Adding new data to dataframe
+    strat_test_set_X = strat_test_set_X.assign(Ratio = extra_attribs[:,-1])
+
+
     #Making a sample of the training set to experiment with
     print("Making a sample of the training set to experiment with")
-    strat_train_set_sample = strat_train_set.sample(frac = 0.5, random_state = 42)
+    strat_train_set_sample = strat_train_set.sample(frac = 0.9, random_state = 42)
 
 
     #Adding another attribute to data frame
@@ -268,25 +283,32 @@ def main():
 
     #Using preparation pipeline
     print("Using preparation pipeline")
-    strat_train_set_sample_array = prep_pipeline.fit_transform(strat_train_set_sample)
-    print(strat_train_set_sample_array)
-    print(strat_train_set_sample_array.shape)
+    print(strat_train_set_sample.columns)
+    strat_train_set_sample_X = strat_train_set_sample.drop(columns = ["default payment next month"])
+    strat_train_set_sample_y = strat_train_set_sample["default payment next month"]
+
+    print(strat_train_set_sample_X.head())
+    print(strat_train_set_sample_y.head())
+
+    strat_train_set_sample_X_array = prep_pipeline.fit_transform(strat_train_set_sample_X)
+    print(strat_train_set_sample_X_array)
+    print(strat_train_set_sample_X_array.shape)
     #Putting it back in to pandas df
-    new_columns = list(strat_train_set_sample.columns)
+    new_columns = list(strat_train_set_sample_X.columns)
     new_columns.append("Ratio")
     print(new_columns)
-    strat_train_set_sample = pd.DataFrame(columns = new_columns, data = strat_train_set_sample_array)
+    strat_train_set_sample_X = pd.DataFrame(columns = new_columns, data = strat_train_set_sample_X_array)
     # strat_train_set_sample.assign(Ratio = [])
     # strat_train_set_sample.append(strat_train_set_sample_array)
 
-    print(strat_train_set_sample)
-    return
+    print(strat_train_set_sample_X)
+    print(strat_train_set_sample_X.describe())
 
 
 
     #Selecting correlated features
-    print("Selecting correlated features")
-    strat_train_set_sample = select_correlated_features(strat_train_set_sample, threshold = 0.08, plot_boolean = False)
+    print("Selecting correlated features using earlier data ")
+    strat_train_set_sample = select_correlated_features(strat_train_set_sample, threshold = 0.08, plot_boolean = False, target = "default payment next month")
 
     print(strat_train_set_sample)
 
@@ -299,13 +321,6 @@ def main():
 
     print(strat_train_set_sample["PAY_0"])
 
-    X_columns = list(strat_train_set_sample.columns)#.remove("default payment next month")
-    X_columns.remove("default payment next month")
-    print(f"X columns: {len(X_columns)}")
-
-    # X = strat_train_set_sample[["PAY_0", "MARRIAGE"]]#.reshape(1, -1)
-    X = strat_train_set_sample[X_columns]
-    y = strat_train_set_sample[["default payment next month"]].astype(np.int)
 
     #Logistic regression
     print("\n\n\nLogistic regression")
@@ -320,19 +335,16 @@ def main():
     #Making parameter grid
     param_grid = [
     {
-    'C' : np.logspace(-4, 4, 20),
+    'C' : np.logspace(-5, 1, 4),
     'penalty' : ['l2'],
-    'solver' : ['sag', 'saga']
-    #  'classifier__penalty' : ['l1', 'l2'],
-    # 'classifier__C' : np.logspace(-4, 4, 20),
-    # 'classifier__solver' : ['liblinear']}
+    'solver' : ['sag']
     }
     ]
 
     #Making grid search object
     grid_clf = GridSearchCV(log_reg, param_grid = param_grid, cv=3, scoring='neg_mean_squared_error')
 
-    grid_clf.fit(X, y)
+    grid_clf.fit(strat_train_set_sample_X, strat_train_set_sample_y)
 
     print(grid_clf.best_params_)
 
@@ -340,42 +352,77 @@ def main():
     for mean_score, params in zip(cvres["mean_test_score"], cvres["params"]):
         print(mean_score, params)
 
-    return
+    log_reg = LogisticRegression(penalty = 'l2', C = 0.001, random_state = 0)
+    log_reg.fit(strat_train_set_sample_X, strat_train_set_sample_y)
+    print(f"Score: {log_reg.score(strat_test_set_X, strat_test_set_y)}")
+
     #Decision trees
     print("Decision tree")
 
     #Instance of decision tree classifier
     dt_clf = DecisionTreeClassifier()
-    dt_clf.fit(X, y)
+    dt_clf.fit(strat_train_set_sample_X, strat_train_set_sample_y)
 
-    print(f"Score: {dt_clf.score(X, y)}")
+    print(f"Score: {dt_clf.score(strat_test_set_X, strat_test_set_y)}")
 
     #Support Vector Machine - is taking a very very long time
-    X_svm = np.array(strat_train_set_sample["PAY_0"]).reshape(-1, 1)#.reshape(-1, 1)
-    print("Support Vector Machine")
-    svm_clf = svm.SVC(kernel='linear')
-    svm_clf.fit(X_svm[:1000], y[:1000])
-    print(f"Score: {svm_clf.score(X_svm, y)}")
+    # X_svm = np.array(strat_train_set_sample["PAY_0"]).reshape(-1, 1)#.reshape(-1, 1)
+    # print("Support Vector Machine")
+    # svm_clf = svm.SVC(kernel='linear')
+    # svm_clf.fit(X_svm[:1000], y[:1000])
+    # print(f"Score: {svm_clf.score(X_svm, y)}")
 
 
     #K-nearest neighbours model
     print("K-nearest neighbours")
 
-    knn_model = KNeighborsClassifier(n_neighbors = 3)
-    knn_model.fit(X, y)
-    print(f"Score: {knn_model.score(X, y)}")
+    knn_model = KNeighborsClassifier(n_neighbors = 4)
+    knn_model.fit(strat_train_set_sample_X, strat_train_set_sample_y)
+    print(f"Score: {knn_model.score(strat_test_set_X, strat_test_set_y)}")
+
+
+    #Random Forest Regressor
+    print("Random forest regressor")
+    param_grid = [
+        {'bootstrap': [True], 'n_estimators': [3, 10, 30], 'max_features': [2, 4, 6, 8]},
+        {'bootstrap': [False], 'n_estimators': [3, 10], 'max_features': [2, 3, 4]},
+        ]
+
+    forest_reg = RandomForestClassifier()
+    grid_search = GridSearchCV(forest_reg, param_grid, cv=5,
+        scoring='neg_mean_squared_error')
+
+    grid_search.fit(strat_train_set_sample_X, strat_train_set_sample_y)
+
+    cvres = grid_search.cv_results_
+    for mean_score, params in zip(cvres["mean_test_score"], cvres["params"]):
+        print(np.sqrt(-mean_score), params)
+
+    print("Checking that the lower the gridsearchcv score, the better")
+
+    forest_reg_1 = RandomForestClassifier(max_features = 8, n_estimators = 30)
+    forest_reg_1.fit(strat_train_set_sample_X, strat_train_set_sample_y)
+    print(f"Score: {forest_reg_1.score(strat_test_set_X, strat_test_set_y)}")
+
+    forest_reg_2 = RandomForestClassifier(max_features = 8, n_estimators = 3)
+    forest_reg_2.fit(strat_train_set_sample_X, strat_train_set_sample_y)
+    print(f"Score: {forest_reg_2.score(strat_test_set_X, strat_test_set_y)}")
+
+    forest_reg_3 = RandomForestClassifier(max_features = 2, n_estimators = 3)
+    forest_reg_3.fit(strat_train_set_sample_X, strat_train_set_sample_y)
+    print(f"Score: {forest_reg_3.score(strat_test_set_X, strat_test_set_y)}")
 
 
 
     #Making an ensemble model
     print(f"Making an ensemble model")
     voting_clf = VotingClassifier(
-        estimators = [('lr', log_reg), ('dt', dt_clf), ('knn', knn_model)],# ('svm', svm_clf)],
+        estimators = [('lr', log_reg), ('knn', knn_model), ('rndm_for', forest_reg_3)],# ('svm', svm_clf)],
         voting = 'soft' #Soft currently doing better than hard
     )
-    voting_clf.fit(X, y)
+    voting_clf.fit(strat_train_set_sample_X, strat_train_set_sample_y)
 
-    print(f"Score: {voting_clf.score(X, y)}")
+    print(f"Score: {voting_clf.score(strat_test_set_X, strat_test_set_y)}")
 
 
     return
